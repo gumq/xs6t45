@@ -14,6 +14,7 @@
       --border: #e1e4e8;
       --gold: #ffb400;
       --green: #28a745;
+      --purple: #722ed1;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
@@ -46,9 +47,9 @@
     }
     .tab-btn.active { background: var(--secondary); color: white; }
 
-    table { width: 100%; border-collapse: collapse; text-align: center; min-width: 700px; }
-    th { background: #f8f9fa; color: var(--secondary); padding: 12px 8px; font-size: 0.9rem; border-bottom: 2px solid var(--border); }
-    td { padding: 10px 8px; border-bottom: 1px solid var(--border); font-size: 0.9rem; vertical-align: middle; }
+    table { width: 100%; border-collapse: collapse; text-align: center; min-width: 900px; }
+    th { background: #f8f9fa; color: var(--secondary); padding: 12px 8px; font-size: 0.85rem; border-bottom: 2px solid var(--border); }
+    td { padding: 10px 8px; border-bottom: 1px solid var(--border); font-size: 0.85rem; vertical-align: middle; }
     tbody tr:hover { background-color: #f1f5f9; }
 
     /* Bóng số */
@@ -79,6 +80,16 @@
     .badge-count.normal { background-color: #e6f7ff; color: #1890ff; }
     .badge-count.hit-badge { background-color: #fffbe6; color: #d48800; border: 1px solid #ffe58f; }
 
+    .summary-box {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 15px; margin-bottom: 15px;
+    }
+    .summary-item {
+      background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0;
+      font-size: 0.9rem;
+    }
+    .summary-item strong { color: var(--secondary); }
+
     .rank-badge {
       display: inline-block; width: 28px; height: 28px; line-height: 28px;
       border-radius: 50%; font-weight: bold; color: white; background: #94a3b8;
@@ -108,11 +119,11 @@
       <p id="data-status">🔄 Đang tự động kiểm tra và đồng bộ dữ liệu mới nhất...</p>
     </header>
 
-    <!-- MỤC MỚI BỔ SUNG: DỰ ĐOÁN BỘ SỐ CHO KỲ TIẾP THEO -->
+    <!-- DỰ ĐOÁN BỘ SỐ CHO KỲ TIẾP THEO -->
     <div class="card" style="border: 2px solid var(--green);">
       <div class="section-title" style="color: var(--green);">
         <span id="next-draw-title">🔮 BỘ SỐ DỰ ĐOÁN CHO KỲ TIẾP THEO</span>
-        <small style="font-size:0.85rem; color:#155724; background: #d4edda; padding: 4px 8px; border-radius: 4px; font-weight:bold;">Tự động tính toán theo 16 Thuật Toán</small>
+        <small style="font-size:0.85rem; color:#155724; background: #d4edda; padding: 4px 8px; border-radius: 4px; font-weight:bold;">Tự động tính toán theo 17 Thuật Toán</small>
       </div>
       <table>
         <thead>
@@ -123,6 +134,34 @@
           </tr>
         </thead>
         <tbody id="next-draw-prediction-table"></tbody>
+      </table>
+    </div>
+
+    <!-- MỤC CẬP NHẬT: THỐNG KÊ CHI TIẾT KHOẢNG HÀNG & CẶP SỐ -->
+    <div class="card" style="border: 2px solid var(--purple);">
+      <div class="section-title" style="color: var(--purple);">
+        <span>📊 Thống Kê Chi Tiết Tần Suất & Cặp Số Theo Khoảng Hàng</span>
+        <small style="font-size:0.8rem; color:#666; font-weight:normal;">Phân tích lịch sử toàn bộ kỳ quay & 1 tháng gần nhất (13 kỳ quay)</small>
+      </div>
+
+      <!-- Tóm tắt 1 tháng -->
+      <div class="summary-box" id="range-month-summary"></div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Khoảng Hàng</th>
+            <th>Kỳ Có Số (Toàn Bộ)</th>
+            <th>Kỳ Vắng (Toàn Bộ)</th>
+            <th>Tổng Số Bóng Đã Ra</th>
+            <th>Tần Suất (%)</th>
+            <th>Số Bóng (1 Tháng)</th>
+            <th>Tổng Số Cặp Trùng</th>
+            <th>Mật Độ Cặp</th>
+            <th>Trạng Thái</th>
+          </tr>
+        </thead>
+        <tbody id="range-pairs-table"></tbody>
       </table>
     </div>
 
@@ -268,6 +307,14 @@
     let selectedUserNumbers = new Set();
     let algoPerformanceStats = {};
 
+    const BINS = {
+      '1-10': [1, 10],
+      '11-19': [11, 19],
+      '20-29': [20, 29],
+      '30-39': [30, 39],
+      '40-45': [40, 45]
+    };
+
     const ALGORITHMS = [
       { id: 'algo1', name: '1. Tiến/Lùi Tối Ưu (±1)' },
       { id: 'algo2', name: '2. Lặp Kế Tiếp + Hot All-Time' },
@@ -284,7 +331,8 @@
       { id: 'algo_poisson', name: '13. Mẫu Hình Poisson (Arrival Rate)' },
       { id: 'algo_delta', name: '14. Mô Hình Bước Nhảy Delta (Delta Distance)' },
       { id: 'algo_reversion', name: '15. Hồi Quy Trung Bình (Mean Reversion)' },
-      { id: 'algo_cluster', name: '16. Phân Cụm 6 Vùng (K-Means Clustering)' }
+      { id: 'algo_cluster', name: '16. Phân Cụm 6 Vùng (K-Means Clustering)' },
+      { id: 'algo_bin_pair', name: '17. Mật Độ Cặp Số Hàng Khoảng (Bin Pair Analysis)' }
     ];
 
     function padNum(n) { return String(n).padStart(2, '0'); }
@@ -346,12 +394,122 @@
     function initApp() {
       initPickerUI();
       renderBasicStats();
+      renderRangePairAnalysis();
       renderRecentDrawsTabs();
       calculateAndRenderLeaderboard();
-      renderNextDrawPrediction(); // Bổ sung render kỳ tiếp theo
+      renderNextDrawPrediction();
       renderPredictionForDraw(rawData.length - 1);
       buildCombos();
       renderCombos(2);
+    }
+
+    // TÍNH TOÁN VÀ PHÂN TÍCH CHI TIẾT KHOẢNG HÀNG
+    function analyzeBinPairs(sliceData) {
+      const totalDraws = sliceData.length;
+      const totalBalls = totalDraws * 6;
+
+      const binPairCounts = {};
+      const binBallCounts = {};
+      const binPresentDraws = {};
+      const maxPairsMap = {};
+      
+      Object.keys(BINS).forEach(bKey => {
+        binPairCounts[bKey] = 0;
+        binBallCounts[bKey] = 0;
+        binPresentDraws[bKey] = 0;
+        const n = BINS[bKey][1] - BINS[bKey][0] + 1;
+        maxPairsMap[bKey] = (n * (n - 1)) / 2;
+      });
+
+      sliceData.forEach(d => {
+        const nums = [...d.numbers].sort((a,b)=>a-b);
+        const presentBinsInDraw = new Set();
+
+        nums.forEach(n => {
+          Object.keys(BINS).forEach(bKey => {
+            const [low, high] = BINS[bKey];
+            if (n >= low && n <= high) {
+              binBallCounts[bKey]++;
+              presentBinsInDraw.add(bKey);
+            }
+          });
+        });
+
+        presentBinsInDraw.forEach(bKey => binPresentDraws[bKey]++);
+
+        for(let i = 0; i < nums.length - 1; i++) {
+          for(let j = i + 1; j < nums.length; j++) {
+            const n1 = nums[i], n2 = nums[j];
+            Object.keys(BINS).forEach(bKey => {
+              const [low, high] = BINS[bKey];
+              if (n1 >= low && n1 <= high && n2 >= low && n2 <= high) {
+                binPairCounts[bKey]++;
+              }
+            });
+          }
+        }
+      });
+
+      const densityMap = {};
+      Object.keys(BINS).forEach(bKey => {
+        densityMap[bKey] = binPairCounts[bKey] / maxPairsMap[bKey];
+      });
+
+      return { totalDraws, totalBalls, binPairCounts, binBallCounts, binPresentDraws, maxPairsMap, densityMap };
+    }
+
+    function renderRangePairAnalysis() {
+      const fullAnalysis = analyzeBinPairs(rawData);
+      const monthData = rawData.slice(-13); // 13 kỳ = khoảng 1 tháng
+      const monthAnalysis = analyzeBinPairs(monthData);
+
+      // Tìm khoảng ra nhiều nhất & nhiều bóng nhất trong 1 tháng
+      let monthMostPresentBin = Object.keys(BINS).reduce((a, b) => monthAnalysis.binPresentDraws[a] > monthAnalysis.binPresentDraws[b] ? a : b);
+      let monthMostBallsBin = Object.keys(BINS).reduce((a, b) => monthAnalysis.binBallCounts[a] > monthAnalysis.binBallCounts[b] ? a : b);
+
+      document.getElementById('range-month-summary').innerHTML = `
+        <div class="summary-item">
+          <strong>🗓️ Khoảng Xuất Hiện Nhiều Kỳ Nhất (1 Tháng - 13 Kỳ):</strong> 
+          Khoảng <b>${monthMostPresentBin}</b> (${monthAnalysis.binPresentDraws[monthMostPresentBin]}/13 kỳ)
+        </div>
+        <div class="summary-item">
+          <strong>⚽ Khoảng Chiếm Nhiều Số Nhất Trong Bộ Số (1 Tháng):</strong> 
+          Khoảng <b>${monthMostBallsBin}</b> (${monthAnalysis.binBallCounts[monthMostBallsBin]} bóng - ${((monthAnalysis.binBallCounts[monthMostBallsBin] / (13*6))*100).toFixed(1)}%)
+        </div>
+      `;
+
+      const sortedByDensity = Object.keys(BINS).sort((a,b) => fullAnalysis.densityMap[b] - fullAnalysis.densityMap[a]);
+      const maxKey = sortedByDensity[0];
+      const minKey = sortedByDensity[sortedByDensity.length - 1];
+
+      const tbody = document.getElementById('range-pairs-table');
+      tbody.innerHTML = Object.keys(BINS).map(bKey => {
+        const present = fullAnalysis.binPresentDraws[bKey];
+        const absent = fullAnalysis.totalDraws - present;
+        const ballCount = fullAnalysis.binBallCounts[bKey];
+        const pct = ((ballCount / fullAnalysis.totalBalls) * 100).toFixed(1);
+        const monthBallCount = monthAnalysis.binBallCounts[bKey];
+        const totalPairs = fullAnalysis.binPairCounts[bKey];
+        const density = fullAnalysis.densityMap[bKey].toFixed(2);
+        
+        let statusTag = '<span class="badge-count normal">Bình Thường</span>';
+        if (bKey === maxKey) statusTag = '<span class="badge-count hot">🔥 Nóng (Nhiều cặp nhất)</span>';
+        if (bKey === minKey) statusTag = '<span class="badge-count cold">❄️ Lạnh (Đang nén cặp)</span>';
+
+        return `
+          <tr>
+            <td><b>Khoảng ${bKey}</b></td>
+            <td><b style="color:var(--green)">${present} kỳ</b></td>
+            <td><span style="color:#dc3545">${absent} kỳ</span></td>
+            <td><b>${ballCount} bóng</b></td>
+            <td><span class="badge-accuracy">${pct}%</span></td>
+            <td><b>${monthBallCount} bóng</b></td>
+            <td><b>${totalPairs} lượt</b></td>
+            <td><b>${density}</b></td>
+            <td>${statusTag}</td>
+          </tr>
+        `;
+      }).join('');
     }
 
     function generatePredictionForAlgo(algoId, targetIndex) {
@@ -518,6 +676,32 @@
           });
           return res.sort((a,b)=>a-b);
         }
+        case 'algo_bin_pair': {
+          const { densityMap } = analyzeBinPairs(sliceData.slice(-25));
+          const sortedBins = Object.keys(densityMap).sort((a,b) => densityMap[a] - densityMap[b]);
+          const coldBinKey = sortedBins[0];
+          const hotBinKey = sortedBins[sortedBins.length - 1];
+
+          const freq = {};
+          for (let i = 1; i <= 45; i++) freq[i] = 0;
+          sliceData.slice(-20).forEach(d => d.numbers.forEach(n => freq[n]++));
+
+          const pickFromBin = (bKey, count) => {
+            const [low, high] = BINS[bKey];
+            const list = [];
+            for (let i = low; i <= high; i++) list.push(i);
+            return list.sort((a,b) => freq[b] - freq[a]).slice(0, count);
+          };
+
+          const numsCold = pickFromBin(coldBinKey, 3);
+          const numsHot = pickFromBin(hotBinKey, 3);
+          let combined = Array.from(new Set([...numsCold, ...numsHot]));
+          
+          for (let i = 1; i <= 45 && combined.length < 6; i++) {
+            if (!combined.includes(i)) combined.push(i);
+          }
+          return combined.slice(0, 6).sort((a,b)=>a-b);
+        }
         default: return [1,2,3,4,5,6];
       }
     }
@@ -539,7 +723,6 @@
 
       stats.sort((a, b) => (b.win3 / b.total) - (a.win3 / a.total));
 
-      // Lưu vào bộ nhớ đệm để hiển thị tỷ lệ hiệu suất bên cạnh dự đoán kỳ tiếp theo
       stats.forEach(s => {
         algoPerformanceStats[s.id] = ((s.win3 / s.total) * 100).toFixed(1);
       });
@@ -562,10 +745,9 @@
       }).join('');
     }
 
-    // --- HÀM TÍNH TOÁN VÀ RENDER DỰ ĐOÁN CHO KỲ TIẾP THEO ---
     function renderNextDrawPrediction() {
       const nextDrawNum = rawData[rawData.length - 1].draw + 1;
-      const targetIndex = rawData.length; // Dự đoán dựa trên toàn bộ rawData hiện có
+      const targetIndex = rawData.length;
       
       document.getElementById('next-draw-title').innerText = `🔮 BỘ SỐ DỰ ĐOÁN CHO KỲ TIẾP THEO (#${nextDrawNum})`;
 
