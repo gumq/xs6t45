@@ -1,17 +1,12 @@
 name: Auto Update Vietlott Data
 
 on:
-  # 1. Chạy tự động mỗi khi bạn PUSH code mới lên branch main (hoặc master)
   push:
     branches:
       - main
       - master
-
-  # 2. Chạy tự động theo lịch 18:45 VN (11:45 UTC) các ngày Thứ 4, Thứ 6, Chủ Nhật
   schedule:
-    - cron: '45 11 * * 3,5,0'
-
-  # 3. Cho phép bấm nút chạy bằng tay trên giao diện GitHub
+    - cron: '45 11 * * 3,5,0' # 18:45 VN các ngày T4, T6, CN
   workflow_dispatch:
 
 jobs:
@@ -25,16 +20,22 @@ jobs:
       - name: 2. Cài đặt Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20' # Chuyển sang Node 20 để hỗ trợ tốt nhất cho Puppeteer ESM
 
       - name: 3. Cài đặt các gói phụ thuộc (Dependencies)
         run: |
           if [ -f package.json ]; then npm install; fi
 
-      - name: 4. Chạy script crawler lấy kết quả Vietlott mới nhất
+      - name: 4. Cài đặt Chrome cho Puppeteer trên Ubuntu Máy Ảo
+        run: |
+          npx puppeteer browsers install chrome
+
+      - name: 5. Chạy script crawler với các biến môi trường Puppeteer Headless
+        env:
+          PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: 'false'
         run: node crawler.js
 
-      - name: 5. Kiểm tra và Commit dữ liệu mới (Nếu có)
+      - name: 6. Kiểm tra và Commit dữ liệu mới (Nếu có)
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
@@ -45,5 +46,5 @@ jobs:
             git commit -m "🤖 [Auto Bot] Cập nhật kết quả Vietlott mới nhất"
             git push
           else
-            echo "✅ Dữ liệu history6.json đã là mới nhất."
+            echo "✅ Dữ liệu history6.json đã ở bản mới nhất."
           fi
