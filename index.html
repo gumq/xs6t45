@@ -347,7 +347,7 @@
     }
 
 async function fetchLatestDataOnline() {
-  // 1. Nạp dữ liệu gốc từ history6.json hoặc localStorage
+  // 1. Tải dữ liệu lịch sử từ history6.json / localStorage
   try {
     const localSaved = localStorage.getItem('mega645_cache');
     const responseHistory = await fetch('data/history6.json');
@@ -366,7 +366,7 @@ async function fetchLatestDataOnline() {
     console.warn('Lỗi đọc history6.json:', err);
   }
 
-  // 2. Gọi API từ Netlify Serverless Function của chính bạn (Không qua proxy thứ 3)
+  // 2. Tải HTML Vietlott từ Netlify Function
   try {
     const res = await fetch('/.netlify/functions/vietlott');
     if (res.ok) {
@@ -374,7 +374,10 @@ async function fetchLatestDataOnline() {
       const parser = new DOMParser();
       const doc = parser.parseFromString(htmlText, 'text/html');
 
-      const drawElem = doc.querySelector('.day_so_ket_qua_v2 .title_result b, .title_result b');
+      // Thẻ chứa Số Kỳ Quay (ví dụ: #01225)
+      const drawElem = doc.querySelector('.day_so_ket_qua_v2 .title_result b, .title_result b, h5 b');
+      
+      // Các quả bóng chứa 6 số trúng thưởng
       const numbersElem = doc.querySelectorAll('.day_so_ket_qua_v2 .bong_giai_thuong, .bong_giai_thuong');
 
       if (drawElem && numbersElem.length >= 6) {
@@ -389,6 +392,7 @@ async function fetchLatestDataOnline() {
         if (latestNumbers.length === 6 && latestDrawNum > 0) {
           const maxExistingDraw = rawData.length > 0 ? Math.max(...rawData.map(d => d.draw)) : 0;
 
+          // Nếu phát hiện kỳ mới hơn dữ liệu cũ -> Tự thêm vào ngay
           if (latestDrawNum > maxExistingDraw) {
             const todayStr = new Date().toISOString().split('T')[0];
             rawData.push({
@@ -399,16 +403,16 @@ async function fetchLatestDataOnline() {
             });
 
             localStorage.setItem('mega645_cache', JSON.stringify(rawData));
-            console.log(`⚡ Cập nhật thành công Kỳ mới #${latestDrawNum}:`, latestNumbers);
+            console.log(`⚡ Đã cập nhật thành công Kỳ mới #${latestDrawNum}:`, latestNumbers);
           }
         }
       }
     }
   } catch (e) {
-    console.warn('Chưa thể lấy dữ liệu mới nhất:', e);
+    console.warn('Chưa nạp được dữ liệu trực tuyến:', e);
   }
 
-  // 3. Hiển thị UI
+  // 3. Đắp dữ liệu và render UI
   rawData.sort((a, b) => a.draw - b.draw);
   
   const statusElem = document.getElementById('data-status');
