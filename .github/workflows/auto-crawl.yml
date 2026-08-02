@@ -40,7 +40,7 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           
-          if git status --porcelain | grep -E "data/history6.json|data/history6.csv"; then
+          if git status --porcelain | grep -E "data/history6.json"; then
             echo "⚡ Có kỳ mới! Tiến hành commit..."
             git add data/
             git commit -m "🤖 [Auto Bot] Update Vietlott draw data"
