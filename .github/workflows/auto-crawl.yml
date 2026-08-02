@@ -33,7 +33,7 @@ jobs:
       - name: 5. Chạy script crawler với các biến môi trường Puppeteer Headless
         env:
           PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: 'false'
-        run: node crawler.js
+        run: node crawler.js update
 
       - name: 6. Kiểm tra và Commit dữ liệu mới (Nếu có)
         run: |
