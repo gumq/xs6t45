@@ -347,7 +347,7 @@
     }
 
 async function fetchLatestDataOnline() {
-  // 1. Tải dữ liệu lịch sử từ history6.json / localStorage
+  // 1. Đọc dữ liệu lịch sử từ history6.json / localStorage
   try {
     const localSaved = localStorage.getItem('mega645_cache');
     const responseHistory = await fetch('data/history6.json');
@@ -366,7 +366,7 @@ async function fetchLatestDataOnline() {
     console.warn('Lỗi đọc history6.json:', err);
   }
 
-  // 2. Tải HTML Vietlott từ Netlify Function
+  // 2. Lấy HTML từ Netlify Function
   try {
     const res = await fetch('/.netlify/functions/vietlott');
     if (res.ok) {
@@ -374,45 +374,59 @@ async function fetchLatestDataOnline() {
       const parser = new DOMParser();
       const doc = parser.parseFromString(htmlText, 'text/html');
 
-      // Thẻ chứa Số Kỳ Quay (ví dụ: #01225)
-      const drawElem = doc.querySelector('.day_so_ket_qua_v2 .title_result b, .title_result b, h5 b');
-      
-      // Các quả bóng chứa 6 số trúng thưởng
-      const numbersElem = doc.querySelectorAll('.day_so_ket_qua_v2 .bong_giai_thuong, .bong_giai_thuong');
+      // Bóc tách Số Kỳ Quay và Bộ Số Trúng từ Minh Ngọc
+      const drawElem = doc.querySelector('.box_kq_vietlott .title, .box_kq_vietlott h1, .box_kq_vietlott h2, .box_kq_vietlott .kua');
+      const numbersElem = doc.querySelectorAll('.box_kq_vietlott .day_so_ket_qua_v2 .bong_giai_thuong, .box_kq_vietlott li, .box_kq_vietlott .bong_so');
 
-      if (drawElem && numbersElem.length >= 6) {
-        const drawText = drawElem.innerText.replace(/[^0-9]/g, '');
-        const latestDrawNum = parseInt(drawText);
+      let latestDrawNum = 0;
+      let latestNumbers = [];
 
-        const latestNumbers = Array.from(numbersElem)
+      // Tìm 6 quả bóng số
+      if (numbersElem && numbersElem.length >= 6) {
+        latestNumbers = Array.from(numbersElem)
           .map(el => parseInt(el.innerText.trim()))
           .filter(n => !isNaN(n) && n >= 1 && n <= 45)
           .slice(0, 6);
+      }
 
-        if (latestNumbers.length === 6 && latestDrawNum > 0) {
-          const maxExistingDraw = rawData.length > 0 ? Math.max(...rawData.map(d => d.draw)) : 0;
+      // Tìm số kỳ
+      if (drawElem) {
+        const match = drawElem.innerText.match(/#?(\d{5})/);
+        if (match) latestDrawNum = parseInt(match[1]);
+      }
 
-          // Nếu phát hiện kỳ mới hơn dữ liệu cũ -> Tự thêm vào ngay
-          if (latestDrawNum > maxExistingDraw) {
-            const todayStr = new Date().toISOString().split('T')[0];
-            rawData.push({
-              draw: latestDrawNum,
-              date: todayStr,
-              numbers: latestNumbers,
-              jackpot: 0
-            });
+      const maxExistingDraw = rawData.length > 0 ? Math.max(...rawData.map(d => d.draw)) : 0;
 
-            localStorage.setItem('mega645_cache', JSON.stringify(rawData));
-            console.log(`⚡ Đã cập nhật thành công Kỳ mới #${latestDrawNum}:`, latestNumbers);
-          }
+      // Nếu không đọc được số kỳ từ text, tự động tăng thêm 1 kỳ so với kỳ lớn nhất hiện có
+      if (latestNumbers.length === 6) {
+        if (!latestDrawNum || latestDrawNum <= maxExistingDraw) {
+          latestDrawNum = maxExistingDraw + 1;
+        }
+
+        // Kiểm tra xem bộ số mới này đã có trong dữ liệu chưa
+        const isAlreadyAdded = rawData.some(d => 
+          d.numbers.length === 6 && d.numbers.every((val, idx) => val === latestNumbers[idx])
+        );
+
+        if (!isAlreadyAdded) {
+          const todayStr = new Date().toISOString().split('T')[0];
+          rawData.push({
+            draw: latestDrawNum,
+            date: todayStr,
+            numbers: latestNumbers,
+            jackpot: 0
+          });
+
+          localStorage.setItem('mega645_cache', JSON.stringify(rawData));
+          console.log(`⚡ Đã tự động cập nhật thành công Kỳ mới #${latestDrawNum}:`, latestNumbers);
         }
       }
     }
   } catch (e) {
-    console.warn('Chưa nạp được dữ liệu trực tuyến:', e);
+    console.warn('Không thể nạp dữ liệu trực tuyến:', e);
   }
 
-  // 3. Đắp dữ liệu và render UI
+  // 3. Render lại toàn bộ giao diện
   rawData.sort((a, b) => a.draw - b.draw);
   
   const statusElem = document.getElementById('data-status');
@@ -422,7 +436,6 @@ async function fetchLatestDataOnline() {
 
   initApp();
 }
-
     function initApp() {
       initPickerUI();
       renderBasicStats();
