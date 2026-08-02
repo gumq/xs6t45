@@ -1,0 +1,49 @@
+name: Auto Update Vietlott Data
+
+on:
+  # 1. Chạy tự động mỗi khi bạn PUSH code mới lên branch main (hoặc master)
+  push:
+    branches:
+      - main
+      - master
+
+  # 2. Chạy tự động theo lịch 18:45 VN (11:45 UTC) các ngày Thứ 4, Thứ 6, Chủ Nhật
+  schedule:
+    - cron: '45 11 * * 3,5,0'
+
+  # 3. Cho phép bấm nút chạy bằng tay trên giao diện GitHub
+  workflow_dispatch:
+
+jobs:
+  crawl-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 1. Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 2. Cài đặt Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: 3. Cài đặt các gói phụ thuộc (Dependencies)
+        run: |
+          if [ -f package.json ]; then npm install; fi
+
+      - name: 4. Chạy script crawler lấy kết quả Vietlott mới nhất
+        run: node crawler.js
+
+      - name: 5. Kiểm tra và Commit dữ liệu mới (Nếu có)
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          if git status --porcelain | grep -q "data/history6.json"; then
+            echo "⚡ Phát hiện kỳ quay mới! Tiến hành commit dữ liệu..."
+            git add data/history6.json
+            git commit -m "🤖 [Auto Bot] Cập nhật kết quả Vietlott mới nhất"
+            git push
+          else
+            echo "✅ Dữ liệu history6.json đã là mới nhất."
+          fi
