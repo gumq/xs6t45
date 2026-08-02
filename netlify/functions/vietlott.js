@@ -1,7 +1,7 @@
 exports.handler = async function(event, context) {
   try {
     // Gọi sang trang Minh Ngọc - Nguồn dữ liệu Vietlott cực kỳ ổn định, không chặn IP Cloud
-    const targetUrl = 'https://www.minhngoc.net.vn/ket-qua-xo-so/vietlott/mega-6x45.html';
+    const targetUrl = 'https://www.minhngoc.net.vn/ket-qua-xo-so/dien-toan-vietlott/mega-6x45.html';
 
     const response = await fetch(targetUrl, {
       headers: {
