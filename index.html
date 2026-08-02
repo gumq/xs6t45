@@ -347,7 +347,6 @@
     }
 
 async function fetchLatestDataOnline() {
-  // 1. Nạp dữ liệu gốc từ history6.json hoặc localStorage nếu đã từng lưu
   try {
     const localSaved = localStorage.getItem('mega645_cache');
     const responseHistory = await fetch('data/history6.json');
@@ -356,7 +355,6 @@ async function fetchLatestDataOnline() {
       rawData = await responseHistory.json();
     }
     
-    // Đảm bảo không mất dữ liệu mới đã từng cào thành công trước đó
     if (localSaved) {
       const parsedCache = JSON.parse(localSaved);
       if (Array.isArray(parsedCache) && parsedCache.length > rawData.length) {
@@ -367,7 +365,6 @@ async function fetchLatestDataOnline() {
     console.warn('Lỗi đọc history6.json:', err);
   }
 
-  // 2. Danh sách Proxy chống Cache (Cache-Busting với timestamp ?t=...)
   const targetUrl = 'https://vietlott.vn/vi/trung-thuong/ket-qua-trung-thuong/645';
   const timestamp = Date.now();
   
@@ -378,7 +375,6 @@ async function fetchLatestDataOnline() {
 
   let fetchedSuccess = false;
 
-  // 3. Thử từng Proxy cho đến khi cào thành công
   for (const proxy of proxyList) {
     if (fetchedSuccess) break;
     try {
@@ -396,47 +392,69 @@ async function fetchLatestDataOnline() {
       const parser = new DOMParser();
       const doc = parser.parseFromString(htmlText, 'text/html');
       
-      const drawElem = doc.querySelector('.day_so_ket_qua_v2 .title_result b');
-      const numbersElem = doc.querySelectorAll('.day_so_ket_qua_v2 .bong_giai_thuong');
+      // Bóc tách Kỳ quay (Thử nhiều selector khác nhau của Vietlott)
+      let drawElem = doc.querySelector('.day_so_ket_qua_v2 .title_result b') || 
+                     doc.querySelector('.day_so_ket_qua_v2 h5 b') ||
+                     doc.querySelector('.title_result b');
       
+      // Bóc tách Bóng số
+      let numbersElem = doc.querySelectorAll('.day_so_ket_qua_v2 .bong_giai_thuong, .day_so_ket_qua_v2 .bg_white');
+      
+      if (!numbersElem || numbersElem.length < 6) {
+        numbersElem = doc.querySelectorAll('.bong_giai_thuong');
+      }
+
       if (drawElem && numbersElem.length >= 6) {
-        const latestDrawNum = parseInt(drawElem.innerText.replace('#', '').trim());
-        const latestNumbers = Array.from(numbersElem).map(el => parseInt(el.innerText.trim())).slice(0, 6);
+        const drawText = drawElem.innerText.replace(/[^0-9]/g, '');
+        const latestDrawNum = parseInt(drawText);
+        
+        const latestNumbers = Array.from(numbersElem)
+          .map(el => parseInt(el.innerText.trim()))
+          .filter(n => !isNaN(n) && n >= 1 && n <= 45)
+          .slice(0, 6);
 
-        const maxExistingDraw = rawData.length > 0 ? Math.max(...rawData.map(d => d.draw)) : 0;
+        if (latestNumbers.length === 6 && latestDrawNum > 0) {
+          const maxExistingDraw = rawData.length > 0 ? Math.max(...rawData.map(d => d.draw)) : 0;
 
-        // Nếu phát hiện kỳ mới hơn trên Vietlott -> Thêm ngay vào hệ thống
-        if (latestDrawNum > maxExistingDraw) {
-          const todayStr = new Date().toISOString().split('T')[0];
-          rawData.push({
-            draw: latestDrawNum,
-            date: todayStr,
-            numbers: latestNumbers,
-            jackpot: 0
-          });
-          
-          // Lưu vào localStorage trình duyệt để không bị mất khi F5
-          localStorage.setItem('mega645_cache', JSON.stringify(rawData));
-          console.log(`⚡ Đã tự động cập nhật thành công Kỳ mới nhất #${latestDrawNum}`);
+          if (latestDrawNum > maxExistingDraw) {
+            const todayStr = new Date().toISOString().split('T')[0];
+            rawData.push({
+              draw: latestDrawNum,
+              date: todayStr,
+              numbers: latestNumbers,
+              jackpot: 0
+            });
+            
+            localStorage.setItem('mega645_cache', JSON.stringify(rawData));
+            console.log(`⚡ Cập nhật thành công Kỳ mới #${latestDrawNum}:`, latestNumbers);
+          } else {
+            console.log(`Dữ liệu đã ở bản mới nhất (#${maxExistingDraw})`);
+          }
+          fetchedSuccess = true;
         }
-        fetchedSuccess = true;
       }
     } catch (e) {
-      console.warn(`Proxy ${proxy} bị lỗi, đang thử proxy tiếp theo...`, e);
+      console.warn(`Lỗi khi cào qua proxy ${proxy}:`, e);
     }
   }
 
-  // 4. Sắp xếp lại thứ tự và Render lại toàn bộ giao diện
   rawData.sort((a, b) => a.draw - b.draw);
   
   const statusElem = document.getElementById('data-status');
   if (statusElem) {
-    statusElem.innerText = `✅ Dữ liệu trực tuyến: ${rawData.length} kỳ quay (Kỳ #${rawData[0].draw} - #${rawData[rawData.length - 1].draw})`;
+    statusElem.innerHTML = `✅ Dữ liệu trực tuyến: <b>${rawData.length}</b> kỳ quay (Kỳ #${rawData[0].draw} - #${rawData[rawData.length - 1].draw}) 
+    <button onclick="forceRefreshData()" style="margin-left:10px; cursor:pointer; padding:2px 8px; font-size:0.8rem; border-radius:4px; background:var(--secondary); color:white; border:none;">🔄 Ép Cập Nhật</button>`;
   }
 
   initApp();
 }
 
+// Hàm ép buộc xóa cache trình duyệt để cào lại
+function forceRefreshData() {
+  localStorage.removeItem('mega645_cache');
+  document.getElementById('data-status').innerText = '🔄 Đang ép buộc tải dữ liệu mới...';
+  fetchLatestDataOnline();
+}
     function initApp() {
       initPickerUI();
       renderBasicStats();
