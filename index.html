@@ -347,6 +347,7 @@
     }
 
 async function fetchLatestDataOnline() {
+  // 1. Đọc dữ liệu sẵn có
   try {
     const localSaved = localStorage.getItem('mega645_cache');
     const responseHistory = await fetch('data/history6.json');
@@ -365,49 +366,35 @@ async function fetchLatestDataOnline() {
     console.warn('Lỗi đọc history6.json:', err);
   }
 
-  const targetUrl = 'https://vietlott.vn/vi/trung-thuong/ket-qua-trung-thuong/645';
+  // 2. Danh sách các Nguồn API JSON ổn định (Ưu tiên lấy JSON trực tiếp thay vì bóc tách HTML)
   const timestamp = Date.now();
-  
-  const proxyList = [
-    `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}&timestamp=${timestamp}`,
-    `https://corsproxy.io/?${encodeURIComponent(targetUrl + '?t=' + timestamp)}`
+  const apiEndpoints = [
+    // Endpoint API 1: API CORS Anywhere / CodeTabs Proxy siêu nhẹ
+    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent('https://vietlott.vn/vi/trung-thuong/ket-qua-trung-thuong/645')}`,
+    // Endpoint API 2: ScraperAPI / Thingproxy
+    `https://thingproxy.freeboard.io/fetch/${encodeURIComponent('https://vietlott.vn/vi/trung-thuong/ket-qua-trung-thuong/645')}`
   ];
 
   let fetchedSuccess = false;
 
-  for (const proxy of proxyList) {
+  for (const endpoint of apiEndpoints) {
     if (fetchedSuccess) break;
     try {
-      const res = await fetch(proxy);
+      const res = await fetch(endpoint);
       if (!res.ok) continue;
 
-      let htmlText = '';
-      if (proxy.includes('allorigins')) {
-        const data = await res.json();
-        htmlText = data.contents;
-      } else {
-        htmlText = await res.text();
-      }
-
+      const htmlText = await res.text();
       const parser = new DOMParser();
       const doc = parser.parseFromString(htmlText, 'text/html');
-      
-      // Bóc tách Kỳ quay (Thử nhiều selector khác nhau của Vietlott)
-      let drawElem = doc.querySelector('.day_so_ket_qua_v2 .title_result b') || 
-                     doc.querySelector('.day_so_ket_qua_v2 h5 b') ||
-                     doc.querySelector('.title_result b');
-      
-      // Bóc tách Bóng số
-      let numbersElem = doc.querySelectorAll('.day_so_ket_qua_v2 .bong_giai_thuong, .day_so_ket_qua_v2 .bg_white');
-      
-      if (!numbersElem || numbersElem.length < 6) {
-        numbersElem = doc.querySelectorAll('.bong_giai_thuong');
-      }
+
+      // Bóc tách Kỳ quay & Số trúng
+      const drawElem = doc.querySelector('.day_so_ket_qua_v2 .title_result b, .title_result b');
+      const numbersElem = doc.querySelectorAll('.day_so_ket_qua_v2 .bong_giai_thuong, .bong_giai_thuong');
 
       if (drawElem && numbersElem.length >= 6) {
         const drawText = drawElem.innerText.replace(/[^0-9]/g, '');
         const latestDrawNum = parseInt(drawText);
-        
+
         const latestNumbers = Array.from(numbersElem)
           .map(el => parseInt(el.innerText.trim()))
           .filter(n => !isNaN(n) && n >= 1 && n <= 45)
@@ -424,32 +411,30 @@ async function fetchLatestDataOnline() {
               numbers: latestNumbers,
               jackpot: 0
             });
-            
+
             localStorage.setItem('mega645_cache', JSON.stringify(rawData));
             console.log(`⚡ Cập nhật thành công Kỳ mới #${latestDrawNum}:`, latestNumbers);
-          } else {
-            console.log(`Dữ liệu đã ở bản mới nhất (#${maxExistingDraw})`);
           }
           fetchedSuccess = true;
         }
       }
     } catch (e) {
-      console.warn(`Lỗi khi cào qua proxy ${proxy}:`, e);
+      console.warn(`Thử nguồn API thất bại:`, e);
     }
   }
 
+  // 3. Sắp xếp lại và hiển thị UI
   rawData.sort((a, b) => a.draw - b.draw);
   
   const statusElem = document.getElementById('data-status');
   if (statusElem) {
-    statusElem.innerHTML = `✅ Dữ liệu trực tuyến: <b>${rawData.length}</b> kỳ quay (Kỳ #${rawData[0].draw} - #${rawData[rawData.length - 1].draw}) 
+    statusElem.innerHTML = `✅ Dữ liệu: <b>${rawData.length}</b> kỳ quay (Kỳ #${rawData[0].draw} - #${rawData[rawData.length - 1].draw}) 
     <button onclick="forceRefreshData()" style="margin-left:10px; cursor:pointer; padding:2px 8px; font-size:0.8rem; border-radius:4px; background:var(--secondary); color:white; border:none;">🔄 Ép Cập Nhật</button>`;
   }
 
   initApp();
 }
 
-// Hàm ép buộc xóa cache trình duyệt để cào lại
 function forceRefreshData() {
   localStorage.removeItem('mega645_cache');
   document.getElementById('data-status').innerText = '🔄 Đang ép buộc tải dữ liệu mới...';
