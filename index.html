@@ -347,7 +347,7 @@
     }
 
 async function fetchLatestDataOnline() {
-  // 1. Đọc dữ liệu lịch sử từ history6.json / localStorage
+  // 1. Tải dữ liệu lịch sử từ history6.json / localStorage
   try {
     const localSaved = localStorage.getItem('mega645_cache');
     const responseHistory = await fetch('data/history6.json');
@@ -366,7 +366,7 @@ async function fetchLatestDataOnline() {
     console.warn('Lỗi đọc history6.json:', err);
   }
 
-  // 2. Lấy HTML từ Netlify Function
+  // 2. Tải HTML từ Netlify Function và bóc tách theo đúng DOM Minh Ngọc
   try {
     const res = await fetch('/.netlify/functions/vietlott');
     if (res.ok) {
@@ -374,59 +374,63 @@ async function fetchLatestDataOnline() {
       const parser = new DOMParser();
       const doc = parser.parseFromString(htmlText, 'text/html');
 
-      // Bóc tách Số Kỳ Quay và Bộ Số Trúng từ Minh Ngọc
-      const drawElem = doc.querySelector('.box_kq_vietlott .title, .box_kq_vietlott h1, .box_kq_vietlott h2, .box_kq_vietlott .kua');
-      const numbersElem = doc.querySelectorAll('.box_kq_vietlott .day_so_ket_qua_v2 .bong_giai_thuong, .box_kq_vietlott li, .box_kq_vietlott .bong_so');
+      // Bảng kết quả kỳ mới nhất trên Minh Ngọc nằm trong .box_kq_vietlott
+      const latestBox = doc.querySelector('.box_kq_vietlott');
+      
+      if (latestBox) {
+        // Selector chuẩn cho các quả bóng số trên Minh Ngọc: .bong_so
+        const numbersElem = latestBox.querySelectorAll('.bong_so');
+        // Selector chuẩn cho kỳ quay: .kua hoặc td/div chứa chữ #0154...
+        const drawElem = latestBox.querySelector('.kua, td, div');
 
-      let latestDrawNum = 0;
-      let latestNumbers = [];
+        let latestDrawNum = 0;
+        let latestNumbers = [];
 
-      // Tìm 6 quả bóng số
-      if (numbersElem && numbersElem.length >= 6) {
-        latestNumbers = Array.from(numbersElem)
-          .map(el => parseInt(el.innerText.trim()))
-          .filter(n => !isNaN(n) && n >= 1 && n <= 45)
-          .slice(0, 6);
-      }
-
-      // Tìm số kỳ
-      if (drawElem) {
-        const match = drawElem.innerText.match(/#?(\d{5})/);
-        if (match) latestDrawNum = parseInt(match[1]);
-      }
-
-      const maxExistingDraw = rawData.length > 0 ? Math.max(...rawData.map(d => d.draw)) : 0;
-
-      // Nếu không đọc được số kỳ từ text, tự động tăng thêm 1 kỳ so với kỳ lớn nhất hiện có
-      if (latestNumbers.length === 6) {
-        if (!latestDrawNum || latestDrawNum <= maxExistingDraw) {
-          latestDrawNum = maxExistingDraw + 1;
+        // Lấy 6 bóng số đầu tiên
+        if (numbersElem && numbersElem.length >= 6) {
+          latestNumbers = Array.from(numbersElem)
+            .map(el => parseInt(el.innerText.trim()))
+            .filter(n => !isNaN(n) && n >= 1 && n <= 45)
+            .slice(0, 6);
         }
 
-        // Kiểm tra xem bộ số mới này đã có trong dữ liệu chưa
-        const isAlreadyAdded = rawData.some(d => 
-          d.numbers.length === 6 && d.numbers.every((val, idx) => val === latestNumbers[idx])
-        );
+        // Bóc tách số kỳ quay từ chuỗi dạng "#01544"
+        const fullText = latestBox.innerText;
+        const matchDraw = fullText.match(/#?(\d{5})/);
+        if (matchDraw) {
+          latestDrawNum = parseInt(matchDraw[1]);
+        }
 
-        if (!isAlreadyAdded) {
-          const todayStr = new Date().toISOString().split('T')[0];
-          rawData.push({
-            draw: latestDrawNum,
-            date: todayStr,
-            numbers: latestNumbers,
-            jackpot: 0
-          });
+        const maxExistingDraw = rawData.length > 0 ? Math.max(...rawData.map(d => d.draw)) : 0;
 
-          localStorage.setItem('mega645_cache', JSON.stringify(rawData));
-          console.log(`⚡ Đã tự động cập nhật thành công Kỳ mới #${latestDrawNum}:`, latestNumbers);
+        if (latestNumbers.length === 6) {
+          // Nếu không bắt được kỳ quay từ text, tự động tính = kỳ lớn nhất + 1
+          if (!latestDrawNum || latestDrawNum <= maxExistingDraw) {
+            latestDrawNum = maxExistingDraw + 1;
+          }
+
+          if (latestDrawNum > maxExistingDraw) {
+            const todayStr = new Date().toISOString().split('T')[0];
+            
+            rawData.push({
+              draw: latestDrawNum,
+              date: todayStr,
+              numbers: latestNumbers,
+              jackpot: 0
+            });
+
+            // Lưu bộ số mới vào cache trình duyệt
+            localStorage.setItem('mega645_cache', JSON.stringify(rawData));
+            console.log(`🎉 ĐÃ CẬP NHẬT KỲ MỚI NẤT #${latestDrawNum}:`, latestNumbers);
+          }
         }
       }
     }
   } catch (e) {
-    console.warn('Không thể nạp dữ liệu trực tuyến:', e);
+    console.warn('Lỗi xử lý dữ liệu:', e);
   }
 
-  // 3. Render lại toàn bộ giao diện
+  // 3. Đắp dữ liệu và render lại toàn bộ trang web
   rawData.sort((a, b) => a.draw - b.draw);
   
   const statusElem = document.getElementById('data-status');
